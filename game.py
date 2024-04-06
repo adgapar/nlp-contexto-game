@@ -1,5 +1,5 @@
 import streamlit as st
-import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity # type: ignore
 import gensim.downloader as api  # type: ignore
 
 @st.cache(allow_output_mutation=True)
@@ -7,7 +7,7 @@ def load_model():
     return api.load('glove-wiki-gigaword-100')
 
 def similarity_score(vec1, vec2):
-    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+    return cosine_similarity(vec1.reshape(1, -1), vec2.reshape(1, -1))[0][0]
 
 def embedding(word):
     try:
