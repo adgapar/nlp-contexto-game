@@ -1,80 +1,152 @@
 import streamlit as st
-import gensim.downloader as api  # type: ignore
-import numpy as np
 import pandas as pd
-from typing import List
-
-
-@st.cache_data(show_spinner=False)
-def load_model():
-    return api.load('glove-wiki-gigaword-100')
-
-def similarity_score(vec1, vec2):
-    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-
-def ranking(max_similarity, similarity):
-    return round(10000 * (max_similarity - similarity) / max_similarity)
-
-def embedding(word):
-    try:
-        return model[word]
-    except KeyError:
-        return None
-    
-model = load_model()
-
-SECRET_WORD = "apple"
-MAX_SIMILARITY = model.most_similar(SECRET_WORD)[0][1]
+import numpy as np
+from nlp import embedding, top10_most_similar, ranking_score
+from word_generator import generate_secret_word
 
 st.title("Word Guessing Game")
-st.write("I'm thinking of a word. Can you guess it?")
+msg = st.empty()
+msg.write("Try to guess the secret word. The closer your word is to the secret word, the higher your score.")  
 
-key = f"{SECRET_WORD}_submissions"
+hint1 = st.empty()
+hint2 = st.empty()
+hint3 = st.empty()
+hint4 = st.empty()
 
-if key in st.session_state:
-    submissions_df = st.session_state[key]
-else:
-    submissions_df = pd.DataFrame({
+def new_game(initial=False):
+    secret_word = generate_secret_word()
+    st.session_state["last_secret_word"] = secret_word
+    st.session_state["input_value"] = ""
+    st.session_state["hints_count"] = 0
+    st.session_state["game_is_finished"] = False
+    st.session_state["submissions"] = pd.DataFrame({
+        "label": [],
         "guess": [],
-        "is_close": [],
-        "similarity": []
+        "proximity": []
     })
-    st.session_state[key] = submissions_df
+    if not initial:
+        st.info("New game started!", icon="🆕")
 
-guess_bars: List[str] = []
+def reset_game():
+    if st.session_state["game_is_finished"]:
+        st.warning("Game is finished. Start new game", icon="🚫")
+    else:
+        st.session_state["submissions"] = pd.DataFrame({
+            "label": [],
+            "guess": [],
+            "proximity": []
+        })
+        st.session_state["input_value"] = ""
+        st.warning("Game is reset: same word, attempts are removed", icon="🔄")
 
-guess_word = st.text_input("Your guess")
+def end_game(reason="lose"):
+    st.session_state["game_is_finished"] = True
+    submissions_df = st.session_state["submissions"]
 
-if guess_word:
+    if reason == "lose":
+        st.error(f"You gave up :(. The secret word was `{SECRET_WORD}`. Do you want to try again?")
+        last_label = f"Correct word: {SECRET_WORD}"
+    elif reason == "win":
+        hints_count = st.session_state["hints_count"]
+        st.success(f"Congratulations! You guessed the secret word `{SECRET_WORD}` with {hints_count} hints.")
+        last_label = f"Correct attempt #{submissions_df.shape[0] + 1}: {SECRET_WORD}"
+    
+    correct_df = pd.DataFrame({
+        "label": last_label,
+        "guess": SECRET_WORD,
+        "proximity": 0
+    }, index=[0])
+
+    submissions_df = pd.concat([submissions_df, correct_df], ignore_index=True)
+    st.session_state["submissions"] = submissions_df
+
+def get_hint():
+    if st.session_state["game_is_finished"]:
+        st.warning("Game is finished. Start new game", icon="🚫")
+    else:
+        hints_count = st.session_state["hints_count"]
+        if hints_count > 4:
+            st.error("No more hints available", icon="🚫")
+        else:
+            st.session_state["hints_count"] = hints_count + 1
+
+def has_been_guessed(guess):
+    submissions_df = st.session_state["submissions"]
+    return guess in submissions_df["guess"].values
+
+def display_progress():
+    submissions_df = st.session_state["submissions"]
+    if submissions_df.shape[0] == 0:
+        return
+    
+    submissions_df = submissions_df.drop_duplicates()
+
+    sorted_submissions = submissions_df.sort_values("proximity", ascending=True)
+    for _, row in sorted_submissions.iterrows():
+        proximity = row["proximity"]
+        label = row["label"]
+        progress = (PROGRESS_SCALE - proximity) / PROGRESS_SCALE
+        st.progress(progress, label)
+
+if "last_secret_word" not in st.session_state:
+    new_game(initial=True)
+
+SECRET_WORD = st.session_state["last_secret_word"]
+SECRET_VEC = embedding(SECRET_WORD)
+PROGRESS_SCALE = 10000
+submissions_df = st.session_state["submissions"]
+hints_count = st.session_state["hints_count"]
+
+if hints_count > 0:
+    hint1.write(f"Hint #1: the secret word starts with `{SECRET_WORD[0]}`")
+if hints_count > 1:
+    hint2.write(f"Hint #2: the secret word ends with `{SECRET_WORD[-1]}`")
+if hints_count > 2:
+    hint3.write(f"Hint #3: the secret word has {len(SECRET_WORD)} letters")
+if hints_count > 4:
+    if "hinted_word" not in st.session_state:
+        closest_words = top10_most_similar(SECRET_WORD)
+        closest_words = [word for word, _ in closest_words]
+        hint_word = np.random.choice(closest_words)
+        st.session_state["hinted_word"] = hint_word
+    
+    hint_word = st.session_state["hinted_word"]
+    hint4.write(f"Hint #4 (final): try `{hint_word}`")
+
+guess_word = st.text_input("Your guess", value=st.session_state["input_value"])
+st.session_state["input_value"] = guess_word
+
+if guess_word and guess_word != "":
+    st.session_state["input_value"] = ""
+    guess_word = guess_word.lower().strip()
     guess_vec = embedding(guess_word)
     if guess_vec is None:
         st.write("I don't know that word.")
+    elif guess_word == SECRET_WORD:
+        end_game(reason="win")
+    elif has_been_guessed(guess_word):
+        st.write("You've already tried that word.")
     else:
-        if guess_word.lower() == SECRET_WORD:
-            st.write("You win!")
-            st.write(f"The secret word was {SECRET_WORD}")
-
-        secret_vec = embedding(SECRET_WORD)
-        score = similarity_score(guess_vec, secret_vec)
-        score = 0 if score < 0 else score
-        ranking_score = ranking(MAX_SIMILARITY, score)
+        score = ranking_score(guess_vec, SECRET_VEC, PROGRESS_SCALE)
         guess_df = pd.DataFrame({
+            "label": f"Attempt #{submissions_df.shape[0] + 1}: {guess_word}",
             "guess": guess_word,
-            "is_close": score > 0.5,
-            "similarity": score
+            "proximity": score
         }, index=[0])
 
         submissions_df = pd.concat([submissions_df, guess_df], ignore_index=True)
-        st.session_state[key] = submissions_df
+        st.session_state["submissions"] = submissions_df
 
-
-to_show = guess_df.shape[0] > 0
+to_show = submissions_df.shape[0] > 0
 
 if to_show:
-    st.write("Previous guesses:")
-    st.write(guess_df)
-    st.write("Guess similarity:")
-    st.write(guess_bars)
+    display_progress()
 
+if st.session_state["game_is_finished"]:
+    msg.write("Game is finished. Start a new game.")
 
-
+st.sidebar.write("Game Controls")
+st.sidebar.button("New Game", on_click=new_game)
+st.sidebar.button("Reset Game", on_click=reset_game)
+st.sidebar.button("End Game", on_click=end_game)
+st.sidebar.button('Hint', on_click=get_hint)
