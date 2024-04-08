@@ -77,7 +77,7 @@ def get_hint():
         st.warning("Game is finished. Start new game", icon="🚫")
     else:
         hints_count = st.session_state["hints_count"]
-        if hints_count > 4:
+        if hints_count > 3:
             st.error("No more hints available", icon="🚫")
         else:
             st.session_state["hints_count"] = hints_count + 1
@@ -115,7 +115,7 @@ if hints_count > 1:
     hint2.write(f"Hint #2: the secret word ends with `{SECRET_WORD[-1]}`")
 if hints_count > 2:
     hint3.write(f"Hint #3: the secret word has {len(SECRET_WORD)} letters")
-if hints_count > 4:
+if hints_count > 3:
     hinted_word = st.session_state["hinted_word"]
     if hinted_word is None:
         closest_words = top10_most_similar(SECRET_WORD)
