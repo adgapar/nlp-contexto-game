@@ -4,17 +4,15 @@ import numpy as np
 from nlp import embedding, top10_most_similar, ranking_score
 from word_generator import generate_secret_word
 
-buttons_panel = st.columns(4)
+buttons_panel = st.columns(2)
+
 with buttons_panel[0]:
-    new_game_button = st.empty()
+    with st.popover("Game controls", use_container_width=True):
+        new_game_button = st.empty()
+        reset_game_button = st.empty()
+        end_game_button = st.empty()
 
 with buttons_panel[1]:
-    reset_game_button = st.empty()
-
-with buttons_panel[2]:
-    end_game_button = st.empty()
-
-with buttons_panel[3]:
     hint_button = st.empty()
 
 st.title("Word Guessing Game")
