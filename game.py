@@ -18,6 +18,7 @@ def new_game(initial=False):
     st.session_state["last_secret_word"] = secret_word
     st.session_state["input_value"] = ""
     st.session_state["hints_count"] = 0
+    st.session_state["hinted_word"] = None
     st.session_state["game_is_finished"] = False
     st.session_state["submissions"] = pd.DataFrame({
         "label": [],
@@ -104,7 +105,8 @@ if hints_count > 1:
 if hints_count > 2:
     hint3.write(f"Hint #3: the secret word has {len(SECRET_WORD)} letters")
 if hints_count > 4:
-    if "hinted_word" not in st.session_state:
+    hinted_word = st.session_state["hinted_word"]
+    if hinted_word is None:
         closest_words = top10_most_similar(SECRET_WORD)
         closest_words = [word for word, _ in closest_words]
         hint_word = np.random.choice(closest_words)
@@ -113,19 +115,30 @@ if hints_count > 4:
     hint_word = st.session_state["hinted_word"]
     hint4.write(f"Hint #4 (final): try `{hint_word}`")
 
-guess_word = st.text_input("Your guess", value=st.session_state["input_value"])
-st.session_state["input_value"] = guess_word
+
+with st.form("guess_form"):
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        guess_word = st.text_input("Your guess", label_visibility="collapsed", placeholder="Your guess", value=st.session_state["input_value"])
+
+    with col2:
+        submitted = st.form_submit_button("Submit", help="Submit your guess", use_container_width=True)
+
+    if submitted:
+        st.session_state["input_value"] = guess_word
+
+guess_word = st.session_state["input_value"]
 
 if guess_word and guess_word != "":
     st.session_state["input_value"] = ""
     guess_word = guess_word.lower().strip()
     guess_vec = embedding(guess_word)
     if guess_vec is None:
-        st.write("I don't know that word.")
+        st.write(":red[I don't know that word.]")
     elif guess_word == SECRET_WORD:
         end_game(reason="win")
     elif has_been_guessed(guess_word):
-        st.write("You've already tried that word.")
+        st.write(":red[You've already tried that word.]")
     else:
         score = ranking_score(guess_vec, SECRET_VEC, PROGRESS_SCALE)
         guess_df = pd.DataFrame({
@@ -133,7 +146,6 @@ if guess_word and guess_word != "":
             "guess": guess_word,
             "proximity": score
         }, index=[0])
-
         submissions_df = pd.concat([submissions_df, guess_df], ignore_index=True)
         st.session_state["submissions"] = submissions_df
 
