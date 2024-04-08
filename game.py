@@ -4,6 +4,19 @@ import numpy as np
 from nlp import embedding, top10_most_similar, ranking_score
 from word_generator import generate_secret_word
 
+buttons_panel = st.columns(4)
+with buttons_panel[0]:
+    new_game_button = st.empty()
+
+with buttons_panel[1]:
+    reset_game_button = st.empty()
+
+with buttons_panel[2]:
+    end_game_button = st.empty()
+
+with buttons_panel[3]:
+    hint_button = st.empty()
+
 st.title("Word Guessing Game")
 msg = st.empty()
 msg.write("Try to guess the secret word. The closer your word is to the secret word, the higher your score.")  
@@ -157,8 +170,7 @@ if to_show:
 if st.session_state["game_is_finished"]:
     msg.write("Game is finished. Start a new game.")
 
-st.sidebar.write("Game Controls")
-st.sidebar.button("New Game", on_click=new_game)
-st.sidebar.button("Reset Game", on_click=reset_game)
-st.sidebar.button("End Game", on_click=end_game)
-st.sidebar.button('Hint', on_click=get_hint)
+new_game_button.button("New Game", on_click=new_game, use_container_width=True)
+reset_game_button.button("Reset Game", on_click=reset_game, use_container_width=True)
+end_game_button.button("End Game", on_click=end_game, use_container_width=True)
+hint_button.button('Hint', on_click=get_hint, use_container_width=True)
